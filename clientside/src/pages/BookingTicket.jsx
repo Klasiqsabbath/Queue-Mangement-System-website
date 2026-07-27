@@ -5,12 +5,15 @@ import { AppContext } from "../context/AppContext";
 import axios from "axios";
 import { toast } from "react-toastify";
 
+const PAYSTACK_PUBLIC_KEY = "pk_live_57086526ca13dd99c49ff5ddb207e9e31430e491";
+
 const BookingTicket = () => {
   const location = useLocation();
   const { appointmentId } = useParams();
   const { backendUrl, token } = useContext(AppContext);
   const [appointment, setAppointment] = useState(location.state?.appointment || null);
   const [loading, setLoading] = useState(!location.state?.appointment);
+  const [paystackReady, setPaystackReady] = useState(false);
 
   useEffect(() => {
     if (appointment) {
@@ -43,6 +46,51 @@ const BookingTicket = () => {
 
     fetchAppointment();
   }, [appointment, appointmentId, backendUrl, token]);
+
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://js.paystack.co/v1/inline.js";
+    script.async = true;
+    script.onload = () => setPaystackReady(true);
+    script.onerror = () => {
+      console.error("Paystack script failed to load.");
+      toast.error("Unable to load payment service. Please try again later.");
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  const payWithPaystack = () => {
+    if (!appointment) {
+      toast.error("Appointment data not loaded yet.");
+      return;
+    }
+
+    if (!paystackReady || !window.PaystackPop) {
+      toast.error("Payment service is not ready yet. Please wait and try again.");
+      return;
+    }
+
+    const handler = window.PaystackPop.setup({
+      key: PAYSTACK_PUBLIC_KEY,
+      email: appointment.userData?.email || "",
+      amount: 100, // charge exactly 1 GHS
+      currency: "GHS",
+      ref: "" + Math.floor(Math.random() * 1000000000 + 1),
+      onClose: function () {
+        toast.info("Payment window closed before completion.");
+      },
+      callback: function (response) {
+        const message = "Payment complete! Reference: " + response.reference;
+        toast.success(message);
+      },
+    });
+
+    handler.openIframe();
+  };
 
   if (loading) {
     return (
@@ -120,9 +168,22 @@ const BookingTicket = () => {
         </div>
 
         <div className="mt-6 p-5 border rounded-lg bg-slate-50">
-        <div className="mt-3 space-y-2 text-sm text-gray-700">
-          <p>{appointment.userData?.name || "Unknown patient"}</p>
-          <p>{appointment.docData?.name || "Unknown doctor"}</p>
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-gray-500">Pay for your appointment</p>
+          {!appointment.isCompleted && !appointment.cancelled ? (
+            <button
+              onClick={payWithPaystack}
+              className="w-full max-w-xs py-3 px-4 bg-primary text-white rounded-lg hover:bg-primary-dark transition"
+            >
+              Pay with Paystack
+            </button>
+          ) : (
+            <p className="text-sm text-gray-600">
+              {appointment.cancelled
+                ? "This appointment was cancelled."
+                : "This appointment has already been completed."}
+            </p>
+          )}
         </div>
       </div>
     </div>

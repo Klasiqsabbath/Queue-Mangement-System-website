@@ -394,7 +394,7 @@ const doctorDashboard = async (req, res) => {
     let earnings = 0;
 
     activeAppointments.forEach((item) => {
-      if (item.isCompleted || item.payment) {
+      if (item.isCompleted) {
         earnings += item.amount;
       }
     });

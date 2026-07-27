@@ -158,7 +158,12 @@ const Appointment = () => {
           name,
           phone: normalizedPhone,
         },
-        { headers: { token } }
+        {
+          headers: {
+            token,
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
       if (data.success) {
         toast.success(data.message);

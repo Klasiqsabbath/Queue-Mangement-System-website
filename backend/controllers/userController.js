@@ -239,7 +239,7 @@ const updateProfile = async (req, res) => {
 const bookAppointment = async (req, res) => {
   try {
     const { docId, slotDate, slotTime, reason, name, phone } = req.body;
-    const userId = req.userId || req.body.userId;
+    const userId = req.userId || req.body?.userId;
 
     if (!userId) {
       return res.json({ success: false, message: "Not Authorized. Please log in again." });
@@ -282,24 +282,20 @@ const bookAppointment = async (req, res) => {
       userData = userDataWithoutPassword;
     }
 
-    if (name) {
-      userData = userData || createFallbackUserData(userId);
-      userData.name = name;
-    }
-
-    if (phone) {
-      userData = userData || createFallbackUserData(userId);
-      userData.phone = phone;
-    }
-
     if (!docData) {
       docData = createFallbackDoctorData(docId);
     }
 
     if (!userData) {
       userData = createFallbackUserData(userId);
-      if (name) userData.name = name;
-      if (phone) userData.phone = phone;
+    }
+
+    if (name) {
+      userData.name = name;
+    }
+
+    if (phone) {
+      userData.phone = phone;
     }
 
     if (docData.available === false) {
