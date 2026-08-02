@@ -8,6 +8,8 @@ import { demoImageUpload } from "../config/cloudinary.js";
 import doctorModel from "../models/doctorModel.js";
 import appointmentModel from "../models/appointmentModel.js";
 import { memoryStorage } from "../storage/memoryStorage.js";
+import { sendBookingConfirmationEmail } from "../utils/emailService.js";
+import { buildAppointmentBookingPayload } from "../utils/bookingHelpers.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev_jwt_secret";
 const canUseDbObjectId = (value) => mongoose.isValidObjectId(value);
@@ -238,7 +240,7 @@ const updateProfile = async (req, res) => {
 // API to book appointment
 const bookAppointment = async (req, res) => {
   try {
-    const { docId, slotDate, slotTime, reason, name, phone } = req.body;
+    const { docId, slotDate, slotTime, reason, name, phone, nhisDetails } = req.body;
     const userId = req.userId || req.body?.userId;
 
     if (!userId) {
@@ -319,6 +321,16 @@ const bookAppointment = async (req, res) => {
     // Remove slots_booked from docData for appointment data
     const { slots_booked: _, ...docDataForAppointment } = docData;
 
+    const bookingPayload = buildAppointmentBookingPayload({
+      docId,
+      slotDate,
+      slotTime,
+      reason,
+      name,
+      phone,
+      nhisDetails,
+    });
+
     const appointmentData = {
       userId,
       docId,
@@ -327,7 +339,8 @@ const bookAppointment = async (req, res) => {
       amount: docData.fees,
       slotTime,
       slotDate,
-      reason: reason || "",
+      reason: bookingPayload.reason,
+      nhisDetails: bookingPayload.nhisDetails,
       date: Date.now(),
     };
 
@@ -354,6 +367,15 @@ const bookAppointment = async (req, res) => {
       newAppointment = memoryStorage.appointments.create(appointmentData);
       memoryStorage.doctors.findByIdAndUpdate(docId, { slots_booked });
     }
+
+    await sendBookingConfirmationEmail({
+      userData,
+      docData,
+      appointmentData: {
+        ...appointmentData,
+        appointmentId: newAppointment?._id || newAppointment?.id,
+      },
+    });
 
     res.json({ success: true, message: "Appointment Booked", appointment: newAppointment });
   } catch (error) {

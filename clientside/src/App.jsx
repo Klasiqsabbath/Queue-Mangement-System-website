@@ -9,6 +9,7 @@ import MyProfile from "./pages/MyProfile";
 import MyAppointments from "./pages/MyAppointments";
 import BookingTicket from "./pages/BookingTicket";
 import Appointment from "./pages/Appointment";
+import NhisDetails from "./pages/NhisDetails";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import { ToastContainer, toast } from "react-toastify";
@@ -34,6 +35,7 @@ const App = () => {
           <Route path="/my-appointments" element={<MyAppointments />} />
           <Route path="/booking-ticket/:appointmentId" element={<BookingTicket />} />
           <Route path="/appointment/:docId" element={<Appointment />} />
+          <Route path="/nhis-details" element={<NhisDetails />} />
         </Routes>
         <Footer />
       </div>

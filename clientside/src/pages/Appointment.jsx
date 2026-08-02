@@ -4,12 +4,10 @@ import { AppContext } from "../context/AppContext";
 import { assets } from "../assets/assets";
 import RelatedDoctors from "../components/RelatedDoctors";
 import { toast } from "react-toastify";
-import axios from "axios";
 
 const Appointment = () => {
   const { docId } = useParams();
-  const { doctors, currencySymbol, backendUrl, token, getDoctorsData, userData } =
-    useContext(AppContext);
+  const { doctors, currencySymbol, token, userData, getDoctorsData } = useContext(AppContext);
   const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
   const navigate = useNavigate();
@@ -24,7 +22,7 @@ const Appointment = () => {
   const [reason, setReason] = useState("");
 
   const cleanPhoneInput = (value) => value.replace(/\D/g, "");
-  const normalizePhone = (value) => cleanPhoneInput(value).replace(/^0+/, "");
+  const normalizePhone = (value) => cleanPhoneInput(value);
 
   const fetchDocInfo = async () => {
     const docInfo = doctors.find((doc) => doc._id === docId);
@@ -103,7 +101,7 @@ const Appointment = () => {
     setSlotIndex(0);
   };
 
-  const bookAppointment = async () => {
+  const goToNhisStep = () => {
     if (!token) {
       toast.warn("Login to book appointment");
       return navigate("/login");
@@ -121,6 +119,16 @@ const Appointment = () => {
 
     const normalizedPhone = normalizePhone(phone);
 
+    if (!/^\d+$/.test(normalizedPhone)) {
+      toast.warn("Phone number must contain only digits");
+      return;
+    }
+
+    if (normalizedPhone.length !== 10) {
+      toast.warn("Phone number must be exactly 10 digits");
+      return;
+    }
+
     if (!normalizedPhone.trim()) {
       toast.warn("Please enter your phone number");
       return;
@@ -131,58 +139,16 @@ const Appointment = () => {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Confirm booking with ${docInfo?.name || "this doctor"} for ${selectedSlot.time}?`
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      const date = selectedSlot.datetime;
-
-      let day = date.getDate();
-      let month = date.getMonth() + 1;
-      let year = date.getFullYear();
-
-      const slotDate = day + "_" + month + "_" + year;
-
-      const { data } = await axios.post(
-        backendUrl + "/api/user/book-appointment",
-        {
-          docId,
-          slotDate,
-          slotTime: selectedSlot.time,
-          reason,
-          name,
-          phone: normalizedPhone,
-        },
-        {
-          headers: {
-            token,
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (data.success) {
-        toast.success(data.message);
-        getDoctorsData();
-        const appointmentId = data.appointment?._id || data.appointment?.id;
-        if (appointmentId) {
-          navigate(`/booking-ticket/${appointmentId}`, {
-            state: { appointment: data.appointment },
-          });
-        } else {
-          navigate("/my-appointments");
-        }
-      } else {
-        toast.error(data.message);
-      }
-    } catch (error) {
-      console.log(error);
-      toast.error(error.message);
-    }
+    navigate("/nhis-details", {
+      state: {
+        docId,
+        docInfo,
+        selectedSlot,
+        reason,
+        name,
+        phone: normalizedPhone,
+      },
+    });
   };
 
   useEffect(() => {
@@ -322,11 +288,12 @@ const Appointment = () => {
                 className="w-full border border-gray-300 rounded-full px-4 py-3 text-sm text-gray-700"
                 type="tel"
                 inputMode="numeric"
+                pattern="[0-9]*"
               />
             </div>
           </div>
 
-          <div className="mt-6 border rounded-full p-4 bg-slate-50">
+          <div className="mt-6 border rounded-2xl p-4 bg-slate-50">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               What is wrong? (message for the doctor)
             </label>
@@ -340,7 +307,7 @@ const Appointment = () => {
           </div>
 
           <button
-            onClick={bookAppointment}
+            onClick={goToNhisStep}
             disabled={
               !selectedSlot ||
               !name.trim() ||
@@ -353,7 +320,7 @@ const Appointment = () => {
                 : "bg-gray-200 text-gray-500 cursor-not-allowed"
             }`}
           >
-            Book an appointment
+            Next
           </button>
         </div>
 

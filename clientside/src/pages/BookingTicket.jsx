@@ -5,7 +5,8 @@ import { AppContext } from "../context/AppContext";
 import axios from "axios";
 import { toast } from "react-toastify";
 
-const PAYSTACK_PUBLIC_KEY = "pk_live_57086526ca13dd99c49ff5ddb207e9e31430e491";
+const FALLBACK_PAYSTACK_PUBLIC_KEY = "pk_live_57086526ca13dd99c49ff5ddb207e9e31430e491";
+const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || FALLBACK_PAYSTACK_PUBLIC_KEY;
 
 const BookingTicket = () => {
   const location = useLocation();
@@ -48,6 +49,21 @@ const BookingTicket = () => {
   }, [appointment, appointmentId, backendUrl, token]);
 
   useEffect(() => {
+    if (window.PaystackPop) {
+      setPaystackReady(true);
+      return undefined;
+    }
+
+    const existingScript = document.querySelector("script[src*='paystack']");
+    if (existingScript) {
+      existingScript.onload = () => setPaystackReady(true);
+      existingScript.onerror = () => {
+        console.error("Paystack script failed to load.");
+        toast.error("Unable to load payment service. Please try again later.");
+      };
+      return undefined;
+    }
+
     const script = document.createElement("script");
     script.src = "https://js.paystack.co/v1/inline.js";
     script.async = true;
@@ -59,7 +75,9 @@ const BookingTicket = () => {
     document.body.appendChild(script);
 
     return () => {
-      document.body.removeChild(script);
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
     };
   }, []);
 
@@ -74,12 +92,19 @@ const BookingTicket = () => {
       return;
     }
 
+    const amountInPesewas = Math.max(1, Number(appointment.amount || 0) * 100);
     const handler = window.PaystackPop.setup({
       key: PAYSTACK_PUBLIC_KEY,
       email: appointment.userData?.email || "",
-      amount: 100, // charge exactly 1 GHS
+      amount: amountInPesewas,
       currency: "GHS",
-      ref: "" + Math.floor(Math.random() * 1000000000 + 1),
+      ref: `prescripto-${appointment._id || appointmentId}-${Date.now()}`,
+      label: appointment.docData?.name || "Appointment payment",
+      metadata: {
+        appointmentId: appointment._id || appointmentId,
+        doctorName: appointment.docData?.name || "",
+        patientName: appointment.userData?.name || "",
+      },
       onClose: function () {
         toast.info("Payment window closed before completion.");
       },
@@ -163,11 +188,37 @@ const BookingTicket = () => {
       </div>
 
       <div className="mt-6 p-5 border rounded-lg bg-slate-50">
-          <p className="text-sm text-gray-500">Reason for visit</p>
-          <p className="mt-2 text-gray-700">{appointment.reason || "Not specified"}</p>
-        </div>
+        <p className="text-sm text-gray-500">Reason for visit</p>
+        <p className="mt-2 text-gray-700">{appointment.reason || "Not specified"}</p>
+      </div>
 
-        <div className="mt-6 p-5 border rounded-lg bg-slate-50">
+      <div className="mt-6 p-5 border rounded-lg bg-slate-50">
+        <p className="text-sm text-gray-500">NHIS details</p>
+        {appointment.nhisDetails ? (
+          <div className="grid gap-3 mt-3 sm:grid-cols-2">
+            <div>
+              <p className="text-xs text-gray-500">NHIS number</p>
+              <p className="text-gray-700">{appointment.nhisDetails.number || "Not provided"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Card number</p>
+              <p className="text-gray-700">{appointment.nhisDetails.cardNumber || "Not provided"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Member name</p>
+              <p className="text-gray-700">{appointment.nhisDetails.memberName || "Not provided"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Provider</p>
+              <p className="text-gray-700">{appointment.nhisDetails.provider || "Not provided"}</p>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-2 text-gray-700">No NHIS details were provided.</p>
+        )}
+      </div>
+
+      <div className="mt-6 p-5 border rounded-lg bg-slate-50">
         <div className="flex flex-col gap-3">
           <p className="text-sm text-gray-500">Pay for your appointment</p>
           {!appointment.isCompleted && !appointment.cancelled ? (
