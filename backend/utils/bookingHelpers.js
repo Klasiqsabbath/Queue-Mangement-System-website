@@ -6,6 +6,7 @@ const buildAppointmentBookingPayload = (bookingData = {}) => {
     reason,
     name,
     phone,
+    email,
     nhisDetails,
   } = bookingData;
 
@@ -16,8 +17,31 @@ const buildAppointmentBookingPayload = (bookingData = {}) => {
     reason: reason || "",
     name: name || "",
     phone: phone || "",
+    email: email || "",
     nhisDetails: nhisDetails || null,
   };
 };
 
-export { buildAppointmentBookingPayload };
+const buildAppointmentQrPayload = (appointmentData = {}) => {
+  const {
+    appointmentId,
+    patientName = "",
+    doctorName = "",
+    slotDate = "",
+    slotTime = "",
+    amount = 1,
+  } = appointmentData;
+
+  return JSON.stringify({
+    appointmentId,
+    patientName,
+    doctorName,
+    slotDate,
+    slotTime,
+    amount: Number(amount || 1),
+    currency: "GHS",
+    type: "appointment-ticket",
+  });
+};
+
+export { buildAppointmentBookingPayload, buildAppointmentQrPayload };

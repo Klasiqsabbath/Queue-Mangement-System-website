@@ -9,7 +9,8 @@ const NhisDetails = () => {
   const navigate = useNavigate();
   const { backendUrl, token, getDoctorsData } = useContext(AppContext);
 
-  const bookingData = location.state || null;
+  const rawState = location.state || null;
+  const bookingData = rawState?.usr || rawState;
 
   const [nhisName, setNhisName] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
@@ -91,6 +92,7 @@ const NhisDetails = () => {
           reason: bookingData.reason || "",
           name: bookingData.name,
           phone: bookingData.phone,
+          email: bookingData.email || "",
           nhisDetails: pendingNhisDetails,
         },
         {
@@ -102,7 +104,15 @@ const NhisDetails = () => {
       );
 
       if (data.success) {
-        toast.success(data.message);
+        if (data.emailResult && !data.emailResult.success) {
+          toast.warn(
+            data.emailResult.message ||
+              "Appointment booked, but confirmation email could not be sent."
+          );
+        } else {
+          toast.success(data.message);
+        }
+
         getDoctorsData();
         const appointmentId = data.appointment?._id || data.appointment?.id;
         if (appointmentId) {
@@ -116,8 +126,12 @@ const NhisDetails = () => {
         toast.error(data.message || "Booking failed");
       }
     } catch (error) {
-      console.log(error);
-      toast.error(error.message || "Something went wrong while booking");
+      console.error("Booking request failed", error);
+      const message =
+        error.response?.data?.message ||
+        error.message ||
+        "Something went wrong while booking";
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }

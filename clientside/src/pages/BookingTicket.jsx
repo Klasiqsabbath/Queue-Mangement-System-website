@@ -1,20 +1,46 @@
-import React, { useEffect, useState } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useParams, useNavigate } from "react-router-dom";
 import { useContext } from "react";
 import { AppContext } from "../context/AppContext";
 import axios from "axios";
 import { toast } from "react-toastify";
 
-const FALLBACK_PAYSTACK_PUBLIC_KEY = "pk_live_57086526ca13dd99c49ff5ddb207e9e31430e491";
+const FALLBACK_PAYSTACK_PUBLIC_KEY = "pk_test_5371fc9cb46483d3af948cb0ff1af9240f331a1d";
 const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || FALLBACK_PAYSTACK_PUBLIC_KEY;
 
 const BookingTicket = () => {
   const location = useLocation();
   const { appointmentId } = useParams();
   const { backendUrl, token } = useContext(AppContext);
+  const navigate = useNavigate();
   const [appointment, setAppointment] = useState(location.state?.appointment || null);
   const [loading, setLoading] = useState(!location.state?.appointment);
   const [paystackReady, setPaystackReady] = useState(false);
+
+  const qrPayload = useMemo(() => {
+    if (!appointment) return "";
+    return appointment.qrPayload || JSON.stringify({
+      appointmentId: appointment._id || appointmentId,
+      patientName: appointment.userData?.name || "",
+      doctorName: appointment.docData?.name || "",
+      slotDate: appointment.slotDate || "",
+      slotTime: appointment.slotTime || "",
+      amount: Number(appointment.amount || 1),
+      currency: "GHS",
+      type: "appointment-ticket",
+    });
+  }, [appointment, appointmentId]);
+
+  const qrScanUrl = useMemo(() => {
+    if (!qrPayload) return "";
+    try {
+      const encoded = btoa(qrPayload);
+      const base = window.location.origin || "";
+      return `${base}/ticket/scan?data=${encodeURIComponent(encoded)}`;
+    } catch (e) {
+      return "";
+    }
+  }, [qrPayload]);
 
   useEffect(() => {
     if (appointment) {
@@ -92,13 +118,13 @@ const BookingTicket = () => {
       return;
     }
 
-    const amountInPesewas = Math.max(1, Number(appointment.amount || 0) * 100);
+    const amountInPesewas = 100;
     const handler = window.PaystackPop.setup({
       key: PAYSTACK_PUBLIC_KEY,
       email: appointment.userData?.email || "",
       amount: amountInPesewas,
       currency: "GHS",
-      ref: `prescripto-${appointment._id || appointmentId}-${Date.now()}`,
+      ref: appointment._id || appointmentId,
       label: appointment.docData?.name || "Appointment payment",
       metadata: {
         appointmentId: appointment._id || appointmentId,
@@ -111,6 +137,15 @@ const BookingTicket = () => {
       callback: function (response) {
         const message = "Payment complete! Reference: " + response.reference;
         toast.success(message);
+        try {
+          const refAppointmentId = appointment._id || appointmentId;
+          const successUrl = `/booking-success?appointmentId=${encodeURIComponent(refAppointmentId)}`;
+          navigate(successUrl, {
+            state: { appointmentId: refAppointmentId, reference: response.reference },
+          });
+        } catch (err) {
+          console.error("Redirect to success page failed", err);
+        }
       },
     });
 
@@ -216,6 +251,29 @@ const BookingTicket = () => {
         ) : (
           <p className="mt-2 text-gray-700">No NHIS details were provided.</p>
         )}
+      </div>
+
+      <div className="mt-6 p-5 border rounded-lg bg-slate-50">
+        <p className="text-sm text-gray-500">Scan QR to check in</p>
+        <p className="mt-2 text-sm text-gray-600">
+          This ticket can be scanned by the clinic to confirm your appointment details.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-4">
+          <div className="min-h-[180px] min-w-[180px] rounded-lg border bg-white p-4">
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrScanUrl || qrPayload)}`}
+              alt="Appointment QR code"
+              className="h-[180px] w-[180px] object-contain"
+            />
+          </div>
+          <div className="max-w-md text-sm text-gray-700">
+            <p><strong>Reference:</strong> {appointment._id || appointmentId}</p>
+            <p><strong>Doctor:</strong> {appointment.docData?.name || "Doctor"}</p>
+            <p><strong>Date:</strong> {appointment.slotDate}</p>
+            <p><strong>Time:</strong> {appointment.slotTime}</p>
+            <p><strong>Fee:</strong> GHS {Number(appointment.amount || 1).toFixed(0)}</p>
+          </div>
+        </div>
       </div>
 
       <div className="mt-6 p-5 border rounded-lg bg-slate-50">

@@ -8,8 +8,10 @@ import Contact from "./pages/Contact";
 import MyProfile from "./pages/MyProfile";
 import MyAppointments from "./pages/MyAppointments";
 import BookingTicket from "./pages/BookingTicket";
+import BookingSuccess from "./pages/BookingSuccess";
 import Appointment from "./pages/Appointment";
 import NhisDetails from "./pages/NhisDetails";
+import ScanTicket from "./pages/ScanTicket";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import { ToastContainer, toast } from "react-toastify";
@@ -34,6 +36,8 @@ const App = () => {
           <Route path="/my-profile" element={<MyProfile />} />
           <Route path="/my-appointments" element={<MyAppointments />} />
           <Route path="/booking-ticket/:appointmentId" element={<BookingTicket />} />
+          <Route path="/booking-success" element={<BookingSuccess />} />
+          <Route path="/ticket/scan" element={<ScanTicket />} />
           <Route path="/appointment/:docId" element={<Appointment />} />
           <Route path="/nhis-details" element={<NhisDetails />} />
         </Routes>

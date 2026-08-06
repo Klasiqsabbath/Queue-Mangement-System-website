@@ -71,7 +71,7 @@ const staticDoctors = [
     degree: 'MBBS',
     experience: '1 Years',
     about: 'Dr. Patel has a strong commitment to delivering comprehensive medical care, focusing on preventive medicine, early diagnosis, and effective treatment strategies.',
-    fees: 30,
+    fees: 1,
     address: {
         line1: '37th Cross, Richmond',
         line2: 'Circle, Ring Road, London'

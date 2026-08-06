@@ -1,5 +1,6 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useRef } from "react";
 import { AppContext } from "../context/AppContext";
+import { Link, useLocation } from "react-router-dom";
 import axios from "axios";
 import { toast } from "react-toastify";
 
@@ -28,6 +29,11 @@ const MyAppointments = () => {
       dateArray[0] + " " + months[Number(dateArray[1])] + " " + dateArray[2]
     );
   };
+
+  const location = useLocation();
+  const highlightId = location?.state?.highlightId;
+
+  const containerRef = useRef(null);
 
   const getUserAppointments = async () => {
     try {
@@ -71,20 +77,34 @@ const MyAppointments = () => {
     }
   }, [token]);
 
+  useEffect(() => {
+    if (!highlightId) return;
+    // wait a tick so the list renders
+    setTimeout(() => {
+      const el = document.querySelector(`[data-id='${highlightId}']`);
+      if (el && el.scrollIntoView) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring", "ring-2", "ring-primary");
+        setTimeout(() => el.classList.remove("ring", "ring-2", "ring-primary"), 4000);
+      }
+    }, 250);
+  }, [appointments, highlightId]);
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mt-12 border-b gap-3">
         <p className="text-xl font-semibold text-zinc-800">My appointments</p>
-        <a
-          href="/"
+        <Link
+          to="/"
           className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-primary rounded hover:bg-primary-dark transition"
         >
           Back to home
-        </a>
+        </Link>
       </div>
       <div className="mt-6">
         {appointments.map((item, index) => (
           <div
+            data-id={item._id}
             className="grid grid-cols-[1fr_2fr] gap-4 sm:flex sm:gap-6 py-2 border-b"
             key={index}
           >

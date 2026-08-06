@@ -15,6 +15,8 @@ const AdminContextProvider = ({ children }) => {
 
   const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
 
+  
+
   const adminHeaders = useMemo(
     () =>
       aToken
@@ -98,6 +100,41 @@ const AdminContextProvider = ({ children }) => {
     }
   };
 
+  const renewNhis = async (appointmentId, expiryDate) => {
+    try {
+      const { data } = await axios.post(
+        backendUrl + "/api/admin/renew-nhis",
+        { appointmentId, expiryDate },
+        { headers: adminHeaders }
+      );
+      if (data.success) {
+        toast.success(data.message);
+        getAllAppointments();
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
+  const deleteNhis = async (appointmentId) => {
+    try {
+      const { data } = await axios.post(
+        backendUrl + "/api/admin/delete-nhis",
+        { appointmentId },
+        { headers: adminHeaders }
+      );
+      if (data.success) {
+        toast.success(data.message);
+        getAllAppointments();
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
   const updateAppointment = async (appointmentId, updateData = {}) => {
     try {
       const { data } = await axios.post(

@@ -60,11 +60,14 @@ const AppContextProvider = (props) => {
     try {
       const { data } = await axios.get(backendUrl + "/api/doctor/list");
       if (data.success) {
-        // Map the image names to actual imported images
-        const doctorsWithImages = data.doctors.map(doctor => ({
-          ...doctor,
-          image: imageMap[doctor.image] || doctor.image
-        }));
+        // Map the image names or paths returned from the backend to the actual imported image assets.
+        const doctorsWithImages = data.doctors.map((doctor) => {
+          const imageKey = doctor.image?.split("/").pop();
+          return {
+            ...doctor,
+            image: imageMap[imageKey] || doctor.image || "",
+          };
+        });
         setDoctors(doctorsWithImages);
       } else {
         toast.error(data.message);

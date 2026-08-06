@@ -383,6 +383,75 @@ const appointmentDelete = async (req, res) => {
   }
 };
 
+// API to renew NHIS expiry date for an appointment
+const renewNhis = async (req, res) => {
+  try {
+    const { appointmentId, expiryDate } = req.body;
+
+    if (!appointmentId) return res.json({ success: false, message: 'appointmentId missing' });
+
+    let appointmentData = null;
+    try {
+      appointmentData = await appointmentModel.findById(appointmentId);
+    } catch (error) {
+      appointmentData = memoryStorage.appointments.findById(appointmentId);
+    }
+
+    if (!appointmentData) return res.json({ success: false, message: 'Appointment not found' });
+
+    const nhisDetails = appointmentData.nhisDetails || {};
+    nhisDetails.expiryDate = expiryDate || nhisDetails.expiryDate;
+
+    try {
+      if (canUseDbObjectId(appointmentId)) {
+        await appointmentModel.findByIdAndUpdate(appointmentId, { nhisDetails });
+      } else {
+        throw new Error('Using memory storage');
+      }
+    } catch (error) {
+      memoryStorage.appointments.findByIdAndUpdate(appointmentId, { nhisDetails });
+    }
+
+    res.json({ success: true, message: 'NHIS expiry updated' });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// API to delete NHIS details from an appointment
+const deleteNhis = async (req, res) => {
+  try {
+    const { appointmentId } = req.body;
+
+    if (!appointmentId) return res.json({ success: false, message: 'appointmentId missing' });
+
+    let appointmentData = null;
+    try {
+      appointmentData = await appointmentModel.findById(appointmentId);
+    } catch (error) {
+      appointmentData = memoryStorage.appointments.findById(appointmentId);
+    }
+
+    if (!appointmentData) return res.json({ success: false, message: 'Appointment not found' });
+
+    try {
+      if (canUseDbObjectId(appointmentId)) {
+        await appointmentModel.findByIdAndUpdate(appointmentId, { nhisDetails: null });
+      } else {
+        throw new Error('Using memory storage');
+      }
+    } catch (error) {
+      memoryStorage.appointments.findByIdAndUpdate(appointmentId, { nhisDetails: null });
+    }
+
+    res.json({ success: true, message: 'NHIS details removed' });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
 const adminDashboard = async (req, res) => {
   try {
     let doctors;
@@ -451,5 +520,7 @@ export {
   appointmentCancel,
   updateAppointment,
   appointmentDelete,
+  renewNhis,
+  deleteNhis,
   adminDashboard,
 };
