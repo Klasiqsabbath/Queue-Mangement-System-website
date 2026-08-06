@@ -19,10 +19,27 @@ const Appointment = () => {
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [reason, setReason] = useState("");
 
   const cleanPhoneInput = (value) => value.replace(/\D/g, "");
-  const normalizePhone = (value) => cleanPhoneInput(value);
+  const normalizePhone = (value) => {
+    const digits = cleanPhoneInput(value);
+
+    if (digits.startsWith("233") && digits.length === 12) {
+      return digits;
+    }
+
+    if (digits.length === 9) {
+      return `0${digits}`;
+    }
+
+    if (digits.startsWith("0") && digits.length === 10) {
+      return digits;
+    }
+
+    return digits;
+  };
 
   const fetchDocInfo = async () => {
     const docInfo = doctors.find((doc) => doc._id === docId);
@@ -117,6 +134,11 @@ const Appointment = () => {
       return;
     }
 
+    if (!email.trim()) {
+      toast.warn("Please enter your email address");
+      return;
+    }
+
     const normalizedPhone = normalizePhone(phone);
 
     if (!/^\d+$/.test(normalizedPhone)) {
@@ -124,8 +146,8 @@ const Appointment = () => {
       return;
     }
 
-    if (normalizedPhone.length !== 10) {
-      toast.warn("Phone number must be exactly 10 digits");
+    if (![10, 12].includes(normalizedPhone.length)) {
+      toast.warn("Phone number must be 10 digits or 12 digits with country code");
       return;
     }
 
@@ -146,6 +168,7 @@ const Appointment = () => {
         selectedSlot,
         reason,
         name,
+        email,
         phone: normalizedPhone,
       },
     });
@@ -162,6 +185,7 @@ const Appointment = () => {
     if (userData) {
       setName((prev) => prev || userData.name || "");
       setPhone((prev) => prev || userData.phone || "");
+      setEmail((prev) => prev || userData.email || "");
     }
   }, [userData]);
 
@@ -284,13 +308,25 @@ const Appointment = () => {
               <input
                 value={phone}
                 onChange={(e) => setPhone(cleanPhoneInput(e.target.value))}
-                placeholder="Enter phone number"
+                placeholder="Enter phone as 0XXXXXXXXX or 233XXXXXXXXX"
                 className="w-full border border-gray-300 rounded-full px-4 py-3 text-sm text-gray-700"
                 type="tel"
                 inputMode="numeric"
                 pattern="[0-9]*"
+                maxLength={12}
               />
             </div>
+          </div>
+
+          <div className="mt-4 border rounded-full p-4 bg-slate-50">
+            <p className="text-sm font-medium text-gray-600 mb-2">Email address</p>
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
+              className="w-full border border-gray-300 rounded-full px-4 py-3 text-sm text-gray-700"
+              type="email"
+            />
           </div>
 
           <div className="mt-6 border rounded-2xl p-4 bg-slate-50">
@@ -311,11 +347,12 @@ const Appointment = () => {
             disabled={
               !selectedSlot ||
               !name.trim() ||
+              !email.trim() ||
               !normalizePhone(phone).trim() ||
               !reason.trim()
             }
             className={`text-sm font-light px-14 py-3 rounded-full my-6 transition ${
-              selectedSlot && name.trim() && normalizePhone(phone).trim() && reason.trim()
+              selectedSlot && name.trim() && email.trim() && normalizePhone(phone).trim() && reason.trim()
                 ? "bg-primary text-white hover:bg-primary-dark"
                 : "bg-gray-200 text-gray-500 cursor-not-allowed"
             }`}

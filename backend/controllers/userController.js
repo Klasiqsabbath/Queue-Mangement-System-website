@@ -8,8 +8,8 @@ import { demoImageUpload } from "../config/cloudinary.js";
 import doctorModel from "../models/doctorModel.js";
 import appointmentModel from "../models/appointmentModel.js";
 import { memoryStorage } from "../storage/memoryStorage.js";
-import { sendBookingConfirmationEmail } from "../utils/emailService.js";
-import { buildAppointmentBookingPayload } from "../utils/bookingHelpers.js";
+import { sendBookingSmsNotification, normalizeRecipientNumber } from "../utils/smsService.js";
+import { buildAppointmentBookingPayload, buildAppointmentQrPayload } from "../utils/bookingHelpers.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev_jwt_secret";
 const canUseDbObjectId = (value) => mongoose.isValidObjectId(value);
@@ -27,7 +27,7 @@ const findMemoryUser = (userId) => {
 const createFallbackUserData = (userId) => ({
   _id: String(userId || "").trim(),
   name: "Registered User",
-  email: "user@example.com",
+  email: process.env.BOOKING_NOTIFICATION_EMAIL || process.env.EMAIL_FROM || process.env.EMAIL_USER || "atture@prescripto.com",
   date: Date.now(),
 });
 
@@ -240,7 +240,7 @@ const updateProfile = async (req, res) => {
 // API to book appointment
 const bookAppointment = async (req, res) => {
   try {
-    const { docId, slotDate, slotTime, reason, name, phone, nhisDetails } = req.body;
+    const { docId, slotDate, slotTime, reason, name, phone, email, nhisDetails } = req.body;
     const userId = req.userId || req.body?.userId;
 
     if (!userId) {
@@ -292,12 +292,24 @@ const bookAppointment = async (req, res) => {
       userData = createFallbackUserData(userId);
     }
 
+    const normalizedPhone = normalizeRecipientNumber(phone);
+    if (phone && (!normalizedPhone || !normalizedPhone.startsWith("233") || normalizedPhone.length !== 12)) {
+      return res.json({
+        success: false,
+        message: "Invalid phone number. Please use a valid Ghana phone number in the format 0XXXXXXXXX or 233XXXXXXXXX.",
+      });
+    }
+
     if (name) {
       userData.name = name;
     }
 
-    if (phone) {
-      userData.phone = phone;
+    if (normalizedPhone) {
+      userData.phone = normalizedPhone;
+    }
+
+    if (email) {
+      userData.email = email;
     }
 
     if (docData.available === false) {
@@ -327,8 +339,20 @@ const bookAppointment = async (req, res) => {
       slotTime,
       reason,
       name,
-      phone,
+      phone: normalizedPhone,
+      email,
       nhisDetails,
+    });
+
+    const selectedDoctorFee = Number(docData?.fees || 1);
+    const fixedAppointmentFee = Number.isFinite(selectedDoctorFee) && selectedDoctorFee > 0 ? selectedDoctorFee : 1;
+    const appointmentQrPayload = buildAppointmentQrPayload({
+      appointmentId: "",
+      patientName: userData?.name || name || "",
+      doctorName: docData?.name || "",
+      slotDate,
+      slotTime,
+      amount: fixedAppointmentFee,
     });
 
     const appointmentData = {
@@ -336,11 +360,13 @@ const bookAppointment = async (req, res) => {
       docId,
       userData,
       docData: docDataForAppointment,
-      amount: docData.fees,
+      phone: bookingPayload.phone,
+      amount: fixedAppointmentFee,
       slotTime,
       slotDate,
       reason: bookingPayload.reason,
       nhisDetails: bookingPayload.nhisDetails,
+      qrPayload: appointmentQrPayload,
       date: Date.now(),
     };
 
@@ -368,16 +394,61 @@ const bookAppointment = async (req, res) => {
       memoryStorage.doctors.findByIdAndUpdate(docId, { slots_booked });
     }
 
-    await sendBookingConfirmationEmail({
-      userData,
-      docData,
-      appointmentData: {
-        ...appointmentData,
-        appointmentId: newAppointment?._id || newAppointment?.id,
-      },
+    const appointmentId = newAppointment?._id || newAppointment?.id;
+    const finalizedQrPayload = buildAppointmentQrPayload({
+      appointmentId,
+      patientName: userData?.name || name || "",
+      doctorName: docData?.name || "",
+      slotDate,
+      slotTime,
+      amount: fixedAppointmentFee,
     });
 
-    res.json({ success: true, message: "Appointment Booked", appointment: newAppointment });
+    if (newAppointment) {
+      newAppointment.qrPayload = finalizedQrPayload;
+      if (newAppointment._id) {
+        try {
+          if (canUseDbObjectId(newAppointment._id)) {
+            await appointmentModel.findByIdAndUpdate(newAppointment._id, { qrPayload: finalizedQrPayload });
+          }
+        } catch (updateError) {
+          console.log("QR payload update failed", updateError);
+        }
+      }
+    }
+
+    // Ensure the confirmation email is sent to the booking email/user email
+    const emailResult = {
+      success: true,
+      skipped: true,
+      message: "Email sending is disabled.",
+    };
+
+    const smsRecipient = bookingPayload.phone || appointmentData.phone || userData.phone;
+    const smsResult = await sendBookingSmsNotification({
+      to: smsRecipient,
+      message: `Thank you for booking an appointment with the Smart Community Health Queue Management System. Your appointment has been successfully received.`,
+    });
+
+    if (!smsResult.success) {
+      console.log("SMS send failed", {
+        recipient: smsRecipient,
+        normalizedTo: smsResult.to,
+        smsResult,
+      });
+    }
+
+    const bookingMessage = smsResult.success
+      ? "Appointment Booked. SMS notification sent. Email sending is disabled."
+      : "Appointment Booked. SMS notification failed. Email sending is disabled.";
+
+    res.json({
+      success: true,
+      message: bookingMessage,
+      appointment: newAppointment,
+      emailResult,
+      smsResult,
+    });
   } catch (error) {
     console.log(error);
     res.json({ success: false, message: error.message });
@@ -411,6 +482,53 @@ const getAppointmentById = async (req, res) => {
     }
 
     res.json({ success: true, appointment });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// API to send appointment confirmation email
+const sendConfirmationEmail = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const { appointmentId } = req.body;
+
+    if (!appointmentId) {
+      return res.json({ success: false, message: "Missing appointmentId" });
+    }
+
+    let appointmentData;
+    try {
+      appointmentData = await appointmentModel.findById(appointmentId);
+    } catch (error) {
+      console.log("Database not available, using memory storage for appointment fetch", error.message);
+    }
+
+    if (!appointmentData) {
+      appointmentData = memoryStorage.appointments.findById(appointmentId);
+    }
+
+    if (!appointmentData) {
+      return res.json({ success: false, message: "Appointment not found" });
+    }
+
+    if (String(appointmentData.userId) !== String(userId)) {
+      return res.json({ success: false, message: "Unauthorized action" });
+    }
+
+    const userData = appointmentData.userData || createFallbackUserData(appointmentData.userId);
+    const docData = appointmentData.docData || createFallbackDoctorData(appointmentData.docId);
+
+    return res.json({
+      success: false,
+      message: "Email sending is disabled.",
+      emailResult: {
+        success: false,
+        skipped: true,
+        message: "Email sending is disabled.",
+      },
+    });
   } catch (error) {
     console.log(error);
     res.json({ success: false, message: error.message });
@@ -524,4 +642,5 @@ export {
   listAppointment,
   getAppointmentById,
   cancelAppointment,
+  sendConfirmationEmail,
 };

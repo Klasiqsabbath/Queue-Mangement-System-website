@@ -23,6 +23,12 @@ services:
         value: demo_cloud
       - key: CLOUDINARY_API_SECRET
         value: demo_cloud
+      - key: SMS_NOTIFY_API_KEY
+        # Set this in Render dashboard or replace with your SMS API key.
+        value: your_sms_notify_api_key_here
+      - key: SMS_SENDER_ID
+        # Set this in Render dashboard or replace with your sender ID.
+        value: your_sms_sender_id_here
 
   - type: static
     name: prescripto-client
